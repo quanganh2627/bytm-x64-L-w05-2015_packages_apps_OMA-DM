@@ -169,15 +169,11 @@ public class DMConfigureDB {
                 mContext.getSystemService(Context.TELEPHONY_SERVICE);
 
         // MEID is CDMA specific.
-        if (tm.getPhoneType() == TelephonyManager.PHONE_TYPE_CDMA) {
-          // convert any hex digits to uppercase
-          return tm.getDeviceId().toUpperCase(Locale.US);
-        } else {
+        if (tm.getPhoneType() != TelephonyManager.PHONE_TYPE_CDMA) {
           loge("getMeid called for non-CDMA phone!");
-          // we could abort the call but that may crash the process,
-          // return sprint string as a hack.
-          return "sprint";
         }
+        // MEID is 14 digits and convert hex digits to uppercase
+        return tm.getDeviceId().substring(0, 14).toUpperCase(Locale.US);
     }
 
     private String getConfigField(String field) {
