@@ -22,6 +22,7 @@ import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.telephony.TelephonyManager;
+import android.text.TextUtils;
 import android.util.Base64;
 import android.util.Log;
 
@@ -78,6 +79,9 @@ public class DMConfigureDB {
             if (cnt == 0) {
                 onCreate(mdb);
             }
+            // NOTE: always update all the account info in DM tree
+            loadDmConfig();
+            loadDmAccount(mdb);
         } finally {
             if (cur != null) {
                 cur.close();
@@ -116,15 +120,6 @@ public class DMConfigureDB {
                 "name TEXT UNIQUE ON CONFLICT REPLACE," +
                 "value TEXT" +
                 ");");
-
-        DMOverlayHelper oh = new DMOverlayHelper(mContext);
-        if (DBG) logd("Package=" + mContext.getPackageName());
-
-        oh.applyXml(db);
-        oh.applyMkitso(db, "dmFlexs");
-
-        loadDmConfig();
-        loadDmAccount(db);
     }
 
     public String getFotaServerID() {
@@ -441,6 +436,14 @@ public class DMConfigureDB {
         if (NativeDM.createInterior(dmServerNodePath) != DMResult.SYNCML_DM_SUCCESS) {
             loge("createInterior '" + dmServerNodePath + "' Error");
             return false;
+        }
+
+        if ("sprint".equalsIgnoreCase(ai.serverID)) {
+            String address = DMHelper.getServerUrl(mContext);
+            if (!TextUtils.isEmpty(address)) {
+                logd("Overriding server URL to: " + address);
+                ai.addr = address;
+            }
         }
 
         if (NativeDM.createLeaf(dmServerNodePath + "/Addr", ai.addr)
