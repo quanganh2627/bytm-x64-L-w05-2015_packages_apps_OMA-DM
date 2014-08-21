@@ -168,7 +168,11 @@ public class DMConfigureDB {
           loge("getMeid called for non-CDMA phone!");
         }
         // MEID is 14 digits and convert hex digits to uppercase
-        return tm.getDeviceId().substring(0, 14).toUpperCase(Locale.US);
+        String devId = tm.getDeviceId();
+        if (devId != null && devId.length() >= 14) {
+            devId = devId.substring(0, 14).toUpperCase(Locale.US);
+        }
+        return devId;
     }
 
     private String getConfigField(String field) {
