@@ -26,9 +26,7 @@ import android.content.res.Resources;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.IBinder;
-import android.telephony.TelephonyManager;
 import android.text.TextUtils;
-import android.util.Base64;
 import android.util.Log;
 
 import com.android.omadm.plugin.IDmtPlugin;
@@ -42,9 +40,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.Locale;
 
 public class DMConfigureDB {
     private static final String TAG = "DMConfigureDB";
@@ -472,30 +467,30 @@ public class DMConfigureDB {
 
         if (NativeDM.createLeaf(dmServerNodePath + "/ServerID", ai.serverID)
                 != DMResult.SYNCML_DM_SUCCESS) {
-            loge("createInterior '" + dmServerNodePath + "/ServerId" + "' Error");
+            loge("createInterior '" + dmServerNodePath + "/ServerId' Error");
             return false;
         }
 
         if (NativeDM.createLeaf(dmServerNodePath + "/AppID", "w7") != DMResult.SYNCML_DM_SUCCESS) {
-            loge("createInterior '" + dmServerNodePath + "/AppID" + "' Error");
+            loge("createInterior '" + dmServerNodePath + "/AppID' Error");
             return false;
         }
 
         if (NativeDM.createLeaf(dmServerNodePath + "/Name", ai.serverName)
                 != DMResult.SYNCML_DM_SUCCESS) {
-            loge("createLeaf '" + dmServerNodePath + "/Name" + "' Error");
+            loge("createLeaf '" + dmServerNodePath + "/Name' Error");
             return false;
         }
 
         if (NativeDM.createLeaf(dmServerNodePath + "/PrefConRef", ai.conRef)
                 != DMResult.SYNCML_DM_SUCCESS) {
-            loge("createLeaf '" + dmServerNodePath + "/ConRef" + "' Error");
+            loge("createLeaf '" + dmServerNodePath + "/ConRef' Error");
             return false;
         }
 
         if (NativeDM.createLeaf(dmServerNodePath + "/AAuthPref", ai.authPref)
                 != DMResult.SYNCML_DM_SUCCESS) {
-            loge("createLeaf '" + dmServerNodePath + "/AAuthPref" + "' Error");
+            loge("createLeaf '" + dmServerNodePath + "/AAuthPref' Error");
             return false;
         }
 
@@ -522,13 +517,13 @@ public class DMConfigureDB {
 
         if (NativeDM.createLeaf(dmServerNodePath + "/Addr", ai.addr)
                 != DMResult.SYNCML_DM_SUCCESS) {
-            loge("createLeaf '" + dmServerNodePath + "/Addr" + "' Error");
+            loge("createLeaf '" + dmServerNodePath + "/Addr' Error");
             return false;
         }
 
         if (NativeDM.createLeaf(dmServerNodePath + "/AddrType", ai.addrType)
                 != DMResult.SYNCML_DM_SUCCESS) {
-            loge("createLeaf '" + dmServerNodePath + "/AddrType" + "' Error");
+            loge("createLeaf '" + dmServerNodePath + "/AddrType' Error");
             return false;
         }
 
@@ -547,7 +542,7 @@ public class DMConfigureDB {
 
         if (NativeDM.createLeaf(dmServerNodePath + "/PortNbr", ai.portNbr)
                 != DMResult.SYNCML_DM_SUCCESS) {
-            loge("createLeaf '" + dmServerNodePath + "/PortNbr" + "' Error");
+            loge("createLeaf '" + dmServerNodePath + "/PortNbr' Error");
             return false;
         }
 
@@ -571,32 +566,42 @@ public class DMConfigureDB {
 
         if (NativeDM.createLeaf(dmServerNodePath + "/AAuthLevel", authLevel)
                 != DMResult.SYNCML_DM_SUCCESS) {
-            loge("createLeaf '" + dmServerNodePath + "/AAuthLevel" + "' Error");
+            loge("createLeaf '" + dmServerNodePath + "/AAuthLevel' Error");
             return false;
         }
 
         if (NativeDM.createLeaf(dmServerNodePath + "/AAuthType", ai.authPref)
                 != DMResult.SYNCML_DM_SUCCESS) {
-            loge("createLeaf '" + dmServerNodePath + "/AAuthType" + "' Error");
+            loge("createLeaf '" + dmServerNodePath + "/AAuthType' Error");
             return false;
         }
 
         if (NativeDM.createLeaf(dmServerNodePath + "/AAuthName", acctName)
                 != DMResult.SYNCML_DM_SUCCESS) {
-            loge("createLeaf '" + dmServerNodePath + "/AAuthName" + "' Error");
+            loge("createLeaf '" + dmServerNodePath + "/AAuthName' Error");
             return false;
         }
 
-        if (ai.serverID.equalsIgnoreCase("sprint")) {
-            logd("ServerID is sprint");
-            if (isBoundTo == null || !isBoundTo.equalsIgnoreCase("sprint")) {
+        if (ai.serverID.equalsIgnoreCase("sprint") ||
+                ai.serverID.equalsIgnoreCase("com.vzwdmserver")) {
+            String intentName;
+            String serviceName;
+            if (ai.serverID.equalsIgnoreCase("sprint")) {
+                intentName = "com.android.sdm.plugins.sprintdm.SprintDMPlugin";
+                serviceName = "SprintDMService";
+            } else {
+                intentName = "com.android.sdm.plugins.connmo.ConnmoPlugin";
+                serviceName = "ConnmoService";
+            }
+            logd("ServerID is " + ai.serverID);
+            if (isBoundTo == null || !isBoundTo.equalsIgnoreCase(ai.serverID)) {
                 unbind();
-                Intent intent = new Intent("com.android.sdm.plugins.sprintdm.SprintDMPlugin");
+                Intent intent = new Intent(intentName);
                 if (mContext.bindService(intent, mConnection, Context.BIND_AUTO_CREATE)) {
-                    isBoundTo = "sprint";
+                    isBoundTo = ai.serverID;
                     synchronized (mLock) {
                         if (mPluginConnection == null) {
-                            logd("Waiting for binding to SprintDMService");
+                            logd("Waiting for binding to " + serviceName);
                             try {
                                 mLock.wait();
                             } catch (Exception e) {
@@ -606,16 +611,29 @@ public class DMConfigureDB {
                     }
                 }
             } else {
-                logd("Already bound to SprintDMService");
+                logd("Already bound to " + serviceName);
             }
         } else {
             unbind();
         }
 
+        boolean hasWriteServerPW = false;
         try {
-            if (mPluginConnection != null && mPluginConnection.getServerPW() != null) {
-                ai.serverPW = mPluginConnection.getServerPW();
-                logd("ServerPW from plugin: " + ai.serverPW);
+            if (mPluginConnection != null) {
+                String serverPW = mPluginConnection.getServerPW(ai.serverPW);
+                if (serverPW != null) {
+                    ai.serverPW = serverPW;
+                    logd("ServerPW from plugin: " + serverPW);
+                } else {
+                    // This must be for vzw
+                    byte[] svrPasswd = hexStringToBytes(ai.serverPW);
+                    if (NativeDM.createLeaf(dmServerNodePath + "/AAuthSecret", svrPasswd)
+                            != DMResult.SYNCML_DM_SUCCESS) {
+                        Log.e(TAG, "CreateLeaf '"+dmServerNodePath + "/AAuthSecret' Error");
+                        return false;
+                    }
+                    hasWriteServerPW = true;
+                }
             } else {
                 logd("Using default ServerPW from dmAccounts: " + ai.serverPW);
             }
@@ -623,15 +641,15 @@ public class DMConfigureDB {
             loge("Exception in writeAccount2Dmt->getServerPW", e);
         }
 
-        if (NativeDM.createLeaf(dmServerNodePath + "/AAuthSecret", ai.serverPW)
+        if (!hasWriteServerPW && NativeDM.createLeaf(dmServerNodePath + "/AAuthSecret", ai.serverPW)
                 != DMResult.SYNCML_DM_SUCCESS) {
-            loge("createLeaf '" + dmServerNodePath + "/AAuthSecret" + "' Error");
+            loge("createLeaf '" + dmServerNodePath + "/AAuthSecret' Error");
             return false;
         }
 
         if (NativeDM.createLeaf(dmServerNodePath + "/AAuthData", ai.serverNonce)
                 != DMResult.SYNCML_DM_SUCCESS) {
-            loge("createLeaf '" + dmServerNodePath + "/AAuthData" + "' Error");
+            loge("createLeaf '" + dmServerNodePath + "/AAuthData' Error");
             return false;
         }
 
@@ -647,21 +665,34 @@ public class DMConfigureDB {
 
         if (NativeDM.createLeaf(dmClientNodePath + "/AAuthLevel", clientAuthLevel)
                 != DMResult.SYNCML_DM_SUCCESS) {
-            loge("createLeaf '" + dmClientNodePath + "/AAuthLevel" + "' Error");
+            loge("createLeaf '" + dmClientNodePath + "/AAuthLevel' Error");
             return false;
         }
 
         String clientAuthType = ai.authPref;
         if (NativeDM.createLeaf(dmClientNodePath + "/AAuthType", clientAuthType)
                 != DMResult.SYNCML_DM_SUCCESS) {
-            loge("createLeaf '" + dmClientNodePath + "/AAuthType" + "' Error");
+            loge("createLeaf '" + dmClientNodePath + "/AAuthType' Error");
             return false;
         }
 
+        boolean hasWriteUserName = false;
         try {
-            if (mPluginConnection != null && mPluginConnection.getUsername() != null) {
-                ai.userName = mPluginConnection.getUsername();
-                logd("Username from plugin: " + ai.userName);
+            if (mPluginConnection != null) {
+                String username = mPluginConnection.getUsername(ai.userName);
+                if (username != null) {
+                    ai.userName = username;
+                    logd("Username from plugin: " + username);
+                } else {
+                    // This must be for vzw
+                    byte[] clientName = hexStringToBytes(ai.userName);//"e0e5e7eaebeb");
+                    if (NativeDM.createLeaf(dmClientNodePath + "/AAuthName", clientName)
+                            != DMResult.SYNCML_DM_SUCCESS) {
+                        Log.e(TAG, "CreateLeaf '"+dmClientNodePath + "/AAuthName' Error");
+                        return false;
+                    }
+                    hasWriteUserName = true;
+                }
             } else {
                 logd("Using default username from dmAccounts: " + ai.userName);
             }
@@ -669,33 +700,46 @@ public class DMConfigureDB {
             loge("Exception in writeAccount2Dmt->getUsername", e);
         }
 
-        if (NativeDM.createLeaf(dmClientNodePath + "/AAuthName", ai.userName)
+        if (!hasWriteUserName && NativeDM.createLeaf(dmClientNodePath + "/AAuthName", ai.userName)
                 != DMResult.SYNCML_DM_SUCCESS) {
-            loge("createLeaf '" + dmClientNodePath + "/AAuthName" + "' Error");
+            loge("createLeaf '" + dmClientNodePath + "/AAuthName' Error");
             return false;
         }
 
+        boolean hasWriteClientPW = false;
         try {
-            if (mPluginConnection != null && mPluginConnection.getClientPW() != null) {
-                ai.clientPW = mPluginConnection.getClientPW();
-                logd("ClientPW from plugin: " + ai.clientPW);
-            } else {
+            if (mPluginConnection != null) {
+                String clientPW = mPluginConnection.getClientPW(ai.clientPW);
+                if (clientPW != null) {
+                    ai.clientPW = clientPW;
+                    logd("ClientPW from plugin: " + clientPW);
+                } else {
+                    // This must be for vzw
+                    byte[] clientPasswd=hexStringToBytes(ai.clientPW);//"ebe8efeeecec");
+                    if (NativeDM.createLeaf(dmClientNodePath + "/AAuthSecret", clientPasswd) !=
+                            DMResult.SYNCML_DM_SUCCESS) {
+                        Log.e(TAG, "CreateLeaf '" + dmClientNodePath + "/AAuthSecret' Error");
+                        return false;
+                    }
+                    hasWriteClientPW = true;
+                }
+            } else  {
                 logd("Using default ClientPW from dmAccounts: " + ai.clientPW);
             }
         } catch (Exception e) {
             loge("Exception in writeAccount2Dmt->getClientPW", e);
         }
 
-        if (NativeDM.createLeaf(dmClientNodePath + "/AAuthSecret", ai.clientPW)
-                != DMResult.SYNCML_DM_SUCCESS) {
-            loge("createLeaf '" + dmClientNodePath + "/AAuthSecret" + "' Error");
+        if (!hasWriteClientPW && NativeDM.createLeaf(dmClientNodePath + "/AAuthSecret", ai.clientPW)
+                    != DMResult.SYNCML_DM_SUCCESS) {
+            loge("createLeaf '" + dmClientNodePath + "/AAuthSecret' Error");
             return false;
         }
 
         String clientNonce = ai.clientNonce;
         if (NativeDM.createLeaf(dmClientNodePath + "/AAuthData", clientNonce)
                 != DMResult.SYNCML_DM_SUCCESS) {
-            loge("createLeaf '" + dmClientNodePath + "/AAuthData" + "' Error");
+            loge("createLeaf '" + dmClientNodePath + "/AAuthData' Error");
             return false;
         }
 
@@ -739,6 +783,31 @@ public class DMConfigureDB {
                 mPluginConnection = null;
             }
         }
+    }
+
+    private static byte[] hexStringToBytes(String s) {
+        byte[] ret;
+
+        if (s == null) return null;
+
+        int sz = s.length();
+
+        ret = new byte[sz/2];
+
+        for (int i=0 ; i <sz ; i+=2) {
+            ret[i/2] = (byte) ((hexCharToInt(s.charAt(i)) << 4)
+                    | hexCharToInt(s.charAt(i+1)));
+        }
+
+        return ret;
+    }
+
+    private static int hexCharToInt(char c) {
+        if (c >= '0' && c <= '9') return (c - '0');
+        if (c >= 'A' && c <= 'F') return (c - 'A' + 10);
+        if (c >= 'a' && c <= 'f') return (c - 'a' + 10);
+
+        throw new RuntimeException ("invalid hex char '" + c + "'");
     }
 
 //    private static void testSprintHashGenerator() {
