@@ -30,6 +30,9 @@ import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
 import org.xmlpull.v1.XmlPullParserFactory;
 
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.MessageDigest;
@@ -364,7 +367,7 @@ public class DMConfigureDB {
                     ai.proxyPortNbr = getRealString(xpp.getAttributeValue(null, "ProxyPortNbr"));
                     if (DBG) logd("addr=" + ai.proxyPortNbr);
 
-
+                    // FIXME: check should be on account name instead of isFirst
                     if (writeAccount2Dmt(ai) && isFirst) {
                         if (DBG) logd("setFotaServerID: " + ai.serverID);
 
@@ -378,6 +381,8 @@ public class DMConfigureDB {
 
                 eventType = xpp.next();
             }
+
+            in.close();
 
         } catch (IOException e) {
             loge("IOException in loadDmAccount", e);
@@ -595,7 +600,8 @@ public class DMConfigureDB {
 
     private InputStream getDMAccXmlInput() {
         try {
-            InputStream in = mContext.getAssets().open("dmAccounts.xml");
+            File file = new File("/system/etc/", "dmAccounts.xml");
+            InputStream in = new BufferedInputStream(new FileInputStream(file));
             if (DBG) logd("Load config from asset dmAccounts.xml");
             return in;
         } catch (IOException e) {
