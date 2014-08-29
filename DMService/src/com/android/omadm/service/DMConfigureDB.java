@@ -16,15 +16,21 @@
 
 package com.android.omadm.service;
 
+import android.content.ComponentName;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.os.IBinder;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.Base64;
 import android.util.Log;
+
+import com.android.omadm.plugin.IDmtPlugin;
 
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
@@ -47,10 +53,35 @@ public class DMConfigureDB {
 
     private static final String DATABASE_NAME = "DMConfigure.db";
 
-    // FIXME: this and the other Sprint stuff *must* be moved to the SprintDM plugin.
-    private static final String SPRINT_DM_SECRET = "dmsecret@sprint";
-
     private final SQLiteDatabase mdb;
+
+    private IDmtPlugin mPluginConnection;
+
+    private String isBoundTo = null;
+
+    protected final Object mLock = new Object();
+
+    private ServiceConnection mConnection = new ServiceConnection() {
+
+        @Override
+        public void onServiceConnected(ComponentName className,
+                                       IBinder service) {
+            logd("onServiceConnected");
+            synchronized (mLock) {
+                // this gets an instance of the IRemoteInterface, which we can use to call on the service
+                mPluginConnection = IDmtPlugin.Stub.asInterface(service);
+                mLock.notifyAll();
+            }
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName arg0) {
+            logd("onServiceDisconnected");
+            synchronized (mLock) {
+                mPluginConnection = null;
+            }
+        }
+    };
 
     static final class AccountInfo {
         public String acctName;     // DM server account name
@@ -85,6 +116,9 @@ public class DMConfigureDB {
             // NOTE: always update all the account info in DM tree
             loadDmConfig();
             loadDmAccount(mdb);
+
+        } catch (Exception e) {
+            loge("exception in DMConfigureDB", e);
         } finally {
             if (cur != null) {
                 cur.close();
@@ -94,6 +128,7 @@ public class DMConfigureDB {
 
     public void closeDatabase() {
         mdb.close();
+        unbind();
     }
 
     void onCreate(SQLiteDatabase db) {
@@ -160,22 +195,6 @@ public class DMConfigureDB {
 //            return 0;
 //        }
 //        return Integer.parseInt(value);
-    }
-
-    String getMeid() {
-        TelephonyManager tm = (TelephonyManager)
-                mContext.getSystemService(Context.TELEPHONY_SERVICE);
-
-        // MEID is CDMA specific.
-        if (tm.getPhoneType() != TelephonyManager.PHONE_TYPE_CDMA) {
-          loge("getMeid called for non-CDMA phone!");
-        }
-        // MEID is 14 digits and convert hex digits to uppercase
-        String devId = tm.getDeviceId();
-        if (devId != null && devId.length() >= 14) {
-            devId = devId.substring(0, 14).toUpperCase(Locale.US);
-        }
-        return devId;
     }
 
     private String getConfigField(String field) {
@@ -522,12 +541,41 @@ public class DMConfigureDB {
             return false;
         }
 
-        // FIXME: remove after adding code to push the account credentials from SprintDM
-        if ("SPRINT".equals(ai.serverPW)) {
-            ai.serverPW = sprintHashGenerator("sprint" + getMeid() + SPRINT_DM_SECRET);
-            if (DBG) logd("sprintHashGenerator for server PW is " + ai.serverPW);
+        if (ai.serverID.equalsIgnoreCase("sprint")) {
+            logd("ServerID is sprint");
+            if (isBoundTo == null || !isBoundTo.equalsIgnoreCase("sprint")) {
+                unbind();
+                Intent intent = new Intent("com.android.sdm.plugins.sprintdm.SprintDMPlugin");
+                if (mContext.bindService(intent, mConnection, Context.BIND_AUTO_CREATE)) {
+                    isBoundTo = "sprint";
+                    synchronized (mLock) {
+                        if (mPluginConnection == null) {
+                            logd("Waiting for binding to SprintDMService");
+                            try {
+                                mLock.wait();
+                            } catch (Exception e) {
+                                loge("Exception in writeAccount2Dmt->wait: ", e);
+                            }
+                        }
+                    }
+                }
+            } else {
+                logd("Already bound to SprintDMService");
+            }
+        } else {
+            unbind();
         }
-        // FIXME: must remove the previous hack before ship!
+
+        try {
+            if (mPluginConnection != null && mPluginConnection.getServerPW() != null) {
+                ai.serverPW = mPluginConnection.getServerPW();
+                logd("ServerPW from plugin: " + ai.serverPW);
+            } else {
+                logd("Using default ServerPW from dmAccounts: " + ai.serverPW);
+            }
+        } catch (Exception e) {
+            loge("Exception in writeAccount2Dmt->getServerPW", e);
+        }
 
         if (NativeDM.createLeaf(dmServerNodePath + "/AAuthSecret", ai.serverPW)
                 != DMResult.SYNCML_DM_SUCCESS) {
@@ -564,10 +612,15 @@ public class DMConfigureDB {
             return false;
         }
 
-        // FIXME: remove this Sprint hack after SprintDM pushes the credentials to us
-        if ("MEID".equals(ai.userName)) {
-            ai.userName = getMeid();
-            if (DBG) logd("FOR SPRINT: setting userName to " + ai.userName);
+        try {
+            if (mPluginConnection != null && mPluginConnection.getUsername() != null) {
+                ai.userName = mPluginConnection.getUsername();
+                logd("Username from plugin: " + ai.userName);
+            } else {
+                logd("Using default username from dmAccounts: " + ai.userName);
+            }
+        } catch (Exception e) {
+            loge("Exception in writeAccount2Dmt->getUsername", e);
         }
 
         if (NativeDM.createLeaf(dmClientNodePath + "/AAuthName", ai.userName)
@@ -576,9 +629,15 @@ public class DMConfigureDB {
             return false;
         }
 
-        if ("SPRINT".equals(ai.clientPW)) {
-            ai.clientPW = sprintHashGenerator(getMeid() + "sprint" + SPRINT_DM_SECRET);
-            if (DBG) logd("sprintHashGenerator for client PW is " + ai.clientPW);
+        try {
+            if (mPluginConnection != null && mPluginConnection.getClientPW() != null) {
+                ai.clientPW = mPluginConnection.getClientPW();
+                logd("ClientPW from plugin: " + ai.clientPW);
+            } else {
+                logd("Using default ClientPW from dmAccounts: " + ai.clientPW);
+            }
+        } catch (Exception e) {
+            loge("Exception in writeAccount2Dmt->getClientPW", e);
         }
 
         if (NativeDM.createLeaf(dmClientNodePath + "/AAuthSecret", ai.clientPW)
@@ -621,17 +680,14 @@ public class DMConfigureDB {
         return ins;
     }
 
-    private static String sprintHashGenerator(String input) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("MD5");
-            digest.update(input.getBytes(), 0, input.length());
-            String hash = Base64.encodeToString(digest.digest(),
-                    Base64.NO_PADDING | Base64.NO_WRAP);
-            hash = hash.replaceAll("\\+", "m").replaceAll("/", "f");
-            return hash;
-        } catch (NoSuchAlgorithmException e) {
-            loge("can't find MD5 algorithm", e);
-            return null;
+    private void unbind() {
+        if (isBoundTo != null) {
+            logd("Unbinding from " + isBoundTo);
+            mContext.unbindService(mConnection);
+            isBoundTo = null;
+            synchronized (mLock) {
+                mPluginConnection = null;
+            }
         }
     }
 
