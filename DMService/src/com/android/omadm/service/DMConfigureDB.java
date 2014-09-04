@@ -22,6 +22,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
+import android.content.res.Resources;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.IBinder;
@@ -88,15 +89,15 @@ public class DMConfigureDB {
         public String serverID;     // DM server ID
         public String addr;         // DM server URL
         public String addrType;     // e.g. "URI"
+        public String portNbr;      // DM server port, e.g. "443"
         public String conRef;       // e.g. ""
         public String serverName;   // DM server name
-        public String portNbr;      // DM server port, e.g. "443"
-        public String serverNonce;  // HMAC server nonce
-        public String serverPW;     // HMAC server password
-        public String clientNonce;  // HMAC client nonce
-        public String clientPW;     // HMAC client password
-        public String userName;     // DM username (e.g. IMSI or MEID)
         public String authPref;     // e.g. "HMAC"
+        public String serverPW;     // HMAC server password
+        public String serverNonce;  // HMAC server nonce
+        public String userName;     // DM username (e.g. IMSI or MEID)
+        public String clientPW;     // HMAC client password
+        public String clientNonce;  // HMAC client nonce
         public String proxyAddr;    // HTTP proxy address
         public String proxyPortNbr; // HTTP proxy port, e.g. "80"
     }
@@ -331,59 +332,88 @@ public class DMConfigureDB {
         }
 
         try {
-            XmlPullParserFactory factory = XmlPullParserFactory.newInstance();
-            factory.setNamespaceAware(true);
-            XmlPullParser xpp = factory.newPullParser();
-
+            XmlPullParser xpp = null;
+            String[] accountInfo = null;
+            int eventType = 0;
+            int num_accounts = 0;
             InputStream in = getDMAccXmlInput();
-            xpp.setInput(in, null);
-            int eventType = xpp.getEventType();
 
-            while (eventType != XmlPullParser.END_DOCUMENT) {
-                if (eventType == XmlPullParser.START_TAG && "Account".equals(xpp.getName())) {
-                    ai.acctName = xpp.getAttributeValue(null, "AccName");
+            if (in != null) {
+                XmlPullParserFactory factory = XmlPullParserFactory.newInstance();
+                factory.setNamespaceAware(true);
+                xpp = factory.newPullParser();
+                xpp.setInput(in, null);
+                eventType = xpp.getEventType();
+            } else {
+                if (DBG) logd("Reading dmAccounts from res");
+                Resources res = mContext.getResources();
+                accountInfo = res.getStringArray(R.array.dm_account_info);
+                if (accountInfo == null) {
+                    if (DBG) logd("accountInfo == null");
+                    return;
+                } else {
+                    if (DBG) logd("Number of accounts = " + accountInfo.length);
+                }
+            }
+
+            while ((in != null && eventType != XmlPullParser.END_DOCUMENT) ||
+                    (in == null && num_accounts < accountInfo.length)) {
+                if (in == null ||
+                        (eventType == XmlPullParser.START_TAG && "Account".equals(xpp.getName()))) {
+                    String[] account = null;
+                    if (in == null) {
+                        account = accountInfo[num_accounts].split(", ");
+                        if (account == null) {
+                            loge("account == null; invalid account info");
+                        } else {
+                            if (DBG) logd("Account # " + (num_accounts + 1) +
+                                    "; number of fields = " + account.length);
+                        }
+                    }
+
+                    ai.acctName = getAttributeValue(xpp, "AccName", account, 0);
                     if (DBG) logd("account=" + ai.acctName);
 
-                    ai.serverID = xpp.getAttributeValue(null, "ServerID");
+                    ai.serverID = getAttributeValue(xpp, "ServerID", account, 1);
                     if (DBG) logd("serverID=" + ai.serverID);
 
-                    ai.addr = getRealString(xpp.getAttributeValue(null, "Addr"));
+                    ai.addr = getRealString(getAttributeValue(xpp, "Addr", account, 2));
                     if (DBG) logd("addr=" + ai.addr);
 
-                    ai.addrType = xpp.getAttributeValue(null, "AddrType");
+                    ai.addrType = getAttributeValue(xpp, "AddrType", account, 3);
                     if (DBG) logd("addrType=" + ai.addrType);
 
-                    ai.portNbr = xpp.getAttributeValue(null, "PortNbr");
+                    ai.portNbr = getAttributeValue(xpp, "PortNbr", account, 4);
                     if (DBG) logd("portNbr=" + ai.portNbr);
 
-                    ai.conRef = xpp.getAttributeValue(null, "ConRef");
+                    ai.conRef = getAttributeValue(xpp, "ConRef", account, 5);
                     if (DBG) logd("conRef=" + ai.conRef);
 
-                    ai.serverName = xpp.getAttributeValue(null, "ServerName");
+                    ai.serverName = getAttributeValue(xpp, "ServerName", account, 6);
                     if (DBG) logd("serverName=" + ai.serverName);
 
-                    ai.authPref = xpp.getAttributeValue(null, "AuthPref");
+                    ai.authPref = getAttributeValue(xpp, "AuthPref", account, 7);
                     if (DBG) logd("authPref=" + ai.authPref);
 
-                    ai.serverPW = xpp.getAttributeValue(null, "ServerPW");
+                    ai.serverPW = getAttributeValue(xpp, "ServerPW", account, 8);
                     if (DBG) logd("serverPW=" + ai.serverPW);
 
-                    ai.serverNonce = xpp.getAttributeValue(null, "ServerNonce");
+                    ai.serverNonce = getAttributeValue(xpp, "ServerNonce", account, 9);
                     if (DBG) logd("serverNonce=" + ai.serverNonce);
 
-                    ai.userName = xpp.getAttributeValue(null, "UserName");
+                    ai.userName = getAttributeValue(xpp, "UserName", account, 10);
                     if (DBG) logd("userName=" + ai.userName);
 
-                    ai.clientPW = xpp.getAttributeValue(null, "ClientPW");
+                    ai.clientPW = getAttributeValue(xpp, "ClientPW", account, 11);
                     if (DBG) logd("clientPW=" + ai.clientPW);
 
-                    ai.clientNonce = xpp.getAttributeValue(null, "ClientNonce");
+                    ai.clientNonce = getAttributeValue(xpp, "ClientNonce", account, 12);
                     if (DBG) logd("clientNonce=" + ai.clientNonce);
 
-                    ai.proxyAddr = getRealString(xpp.getAttributeValue(null, "ProxyAddr"));
+                    ai.proxyAddr = getRealString(getAttributeValue(xpp, "ProxyAddr", account, 13));
                     if (DBG) logd("proxyAddr=" + ai.proxyAddr);
 
-                    ai.proxyPortNbr = getRealString(xpp.getAttributeValue(null, "ProxyPortNbr"));
+                    ai.proxyPortNbr = getRealString(getAttributeValue(xpp, "ProxyPortNbr", account, 14));
                     if (DBG) logd("addr=" + ai.proxyPortNbr);
 
                     // FIXME: check should be on account name instead of isFirst
@@ -398,15 +428,31 @@ public class DMConfigureDB {
                     }
                 }
 
-                eventType = xpp.next();
+                if (in != null) {
+                    eventType = xpp.next();
+                } else {
+                    num_accounts++;
+                }
             }
 
-            in.close();
+            if (in != null) {
+                in.close();
+            }
 
         } catch (IOException e) {
             loge("IOException in loadDmAccount", e);
         } catch (XmlPullParserException e) {
             loge("XmlPullParserException in loadDmAccount", e);
+        }
+    }
+
+    private String getAttributeValue(XmlPullParser xpp, String attribute, String[] account, int idx) {
+        if (xpp != null) {
+            return xpp.getAttributeValue(null, attribute);
+        } else if (account != null && idx < account.length) {
+            return account[idx];
+        } else {
+            return null;
         }
     }
 
@@ -660,9 +706,13 @@ public class DMConfigureDB {
     private InputStream getDMAccXmlInput() {
         try {
             File file = new File("/system/etc/", "dmAccounts.xml");
-            InputStream in = new BufferedInputStream(new FileInputStream(file));
-            if (DBG) logd("Load config from asset dmAccounts.xml");
-            return in;
+            if (file.exists()) {
+                InputStream in = new BufferedInputStream(new FileInputStream(file));
+                if (DBG) logd("Load config from /system/etc/dmAccounts.xml");
+                return in;
+            } else {
+                return null;
+            }
         } catch (IOException e) {
             loge("IOException in getDMAccXmlInput", e);
             return null;
