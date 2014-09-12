@@ -237,14 +237,14 @@ public class DMConfigureDB {
         if (DMSettingsHelper.isPhoneTypeLTE()) {
             SharedPreferences p = mContext.getSharedPreferences(DMHelper.IMEI_PREFERENCE_KEY, 0);
             String gsmImei = p.getString(DMHelper.IMEI_VALUE_KEY, null);
-            if (DBG) logd("gsmImei in loadDmConfig is " + gsmImei);
+            logd("gsmImei in loadDmConfig is " + gsmImei);
             //ed.clear();
             if (null == gsmImei || gsmImei.isEmpty()) {
                 // this is needed to avoid showing DMService app force close
-                if (DBG) logd("set the imei value to zero");
+                logd("set the imei value to zero");
                 gsmImei = "0";
             } else if (gsmImei.length() > 15) {
-                if (DBG) logd("imei length exceeding 15 digits so trim it to 15");
+                logd("imei length exceeding 15 digits so trim it to 15");
                 gsmImei = gsmImei.substring(0, 15);
             }
             setGsmImei(gsmImei);
@@ -263,7 +263,7 @@ public class DMConfigureDB {
             if (cr.moveToFirst()) {
                 do {
                     ai.acctName = cr.getString(cr.getColumnIndex("AccName"));
-                    if (DBG) logd("[Factory]account=" + ai.acctName);
+                    logd("[Factory]account=" + ai.acctName);
 
                     ai.serverID = cr.getString(cr.getColumnIndex("ServerID"));
                     if (DBG) logd("[Factory]serverID=" + ai.serverID);
@@ -340,14 +340,14 @@ public class DMConfigureDB {
                 xpp.setInput(in, null);
                 eventType = xpp.getEventType();
             } else {
-                if (DBG) logd("Reading dmAccounts from res");
+                logd("Reading dmAccounts from res");
                 Resources res = mContext.getResources();
                 accountInfo = res.getStringArray(R.array.dm_account_info);
                 if (accountInfo == null) {
                     if (DBG) logd("accountInfo == null");
                     return;
                 } else {
-                    if (DBG) logd("Number of accounts = " + accountInfo.length);
+                    logd("Number of accounts = " + accountInfo.length);
                 }
             }
 
@@ -367,7 +367,7 @@ public class DMConfigureDB {
                     }
 
                     ai.acctName = getAttributeValue(xpp, "AccName", account, 0);
-                    if (DBG) logd("account=" + ai.acctName);
+                    logd("account=" + ai.acctName);
 
                     ai.serverID = getAttributeValue(xpp, "ServerID", account, 1);
                     if (DBG) logd("serverID=" + ai.serverID);
@@ -457,7 +457,7 @@ public class DMConfigureDB {
         String acctName = ai.serverID;     // e.g. "sprint"; this is also the value for ServerID
         String dmServerNodePath = "./DMAcc/" + acctName;
 
-        if (DBG) logd("XXX DELETING old server node path: " + dmServerNodePath);
+        logd("XXX DELETING old server node path: " + dmServerNodePath);
         NativeDM.deleteNode(dmServerNodePath);
 
         if (NativeDM.createInterior(dmServerNodePath) != DMResult.SYNCML_DM_SUCCESS) {
@@ -629,7 +629,7 @@ public class DMConfigureDB {
                     byte[] svrPasswd = hexStringToBytes(ai.serverPW);
                     if (NativeDM.createLeaf(dmServerNodePath + "/AAuthSecret", svrPasswd)
                             != DMResult.SYNCML_DM_SUCCESS) {
-                        Log.e(TAG, "CreateLeaf '"+dmServerNodePath + "/AAuthSecret' Error");
+                        loge("CreateLeaf '"+dmServerNodePath + "/AAuthSecret' Error");
                         return false;
                     }
                     hasWriteServerPW = true;
@@ -688,7 +688,7 @@ public class DMConfigureDB {
                     byte[] clientName = hexStringToBytes(ai.userName);//"e0e5e7eaebeb");
                     if (NativeDM.createLeaf(dmClientNodePath + "/AAuthName", clientName)
                             != DMResult.SYNCML_DM_SUCCESS) {
-                        Log.e(TAG, "CreateLeaf '"+dmClientNodePath + "/AAuthName' Error");
+                        loge("CreateLeaf '"+dmClientNodePath + "/AAuthName' Error");
                         return false;
                     }
                     hasWriteUserName = true;
@@ -718,7 +718,7 @@ public class DMConfigureDB {
                     byte[] clientPasswd=hexStringToBytes(ai.clientPW);//"ebe8efeeecec");
                     if (NativeDM.createLeaf(dmClientNodePath + "/AAuthSecret", clientPasswd) !=
                             DMResult.SYNCML_DM_SUCCESS) {
-                        Log.e(TAG, "CreateLeaf '" + dmClientNodePath + "/AAuthSecret' Error");
+                        loge("CreateLeaf '" + dmClientNodePath + "/AAuthSecret' Error");
                         return false;
                     }
                     hasWriteClientPW = true;
@@ -743,7 +743,7 @@ public class DMConfigureDB {
             return false;
         }
 
-        if (DBG) logd("leave writeAccount2Dmt: success");
+        logd("leave writeAccount2Dmt: success");
         return true;
     }
 
@@ -752,7 +752,7 @@ public class DMConfigureDB {
             File file = new File("/system/etc/", "dmAccounts.xml");
             if (file.exists()) {
                 InputStream in = new BufferedInputStream(new FileInputStream(file));
-                if (DBG) logd("Load config from /system/etc/dmAccounts.xml");
+                logd("Load config from /system/etc/dmAccounts.xml");
                 return in;
             } else {
                 return null;
@@ -815,9 +815,9 @@ public class DMConfigureDB {
 //        String server = "sprint";
 //        String secret = "foobar";
 //
-//        Log.d(TAG, "XXXXX B64(MD5(\"foobar\") = " + sprintHashGenerator("foobar"));
-//        Log.d(TAG, "XXXXX f(equip,server,secret) = " + sprintHashGenerator(equip + server + secret));
-//        Log.d(TAG, "XXXXX f(server,equip,secret) = " + sprintHashGenerator(server + equip + secret));
+//        logd("XXXXX B64(MD5(\"foobar\") = " + sprintHashGenerator("foobar"));
+//        logd("XXXXX f(equip,server,secret) = " + sprintHashGenerator(equip + server + secret));
+//        logd("XXXXX f(server,equip,secret) = " + sprintHashGenerator(server + equip + secret));
 //    }
 
     private static void logd(String msg) {
