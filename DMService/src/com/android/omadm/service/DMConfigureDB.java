@@ -183,8 +183,7 @@ public class DMConfigureDB {
      * 2 = convert wbxml to xml messages and log it
      */
     public int getSyncMLLogLevel() {
-        // FIXME always enable for now
-        return 2;
+        return 1;
 
 //        String value = getConfigField("DmSyncMLLogLevel");
 //        if (null == value) {
